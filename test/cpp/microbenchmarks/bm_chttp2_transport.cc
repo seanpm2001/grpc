@@ -55,7 +55,6 @@ class PhonyEndpoint : public grpc_endpoint {
                                                    add_to_pollset,
                                                    add_to_pollset_set,
                                                    delete_from_pollset_set,
-                                                   shutdown,
                                                    destroy,
                                                    get_peer,
                                                    get_local_address,
@@ -114,13 +113,11 @@ class PhonyEndpoint : public grpc_endpoint {
   static void delete_from_pollset_set(grpc_endpoint* /*ep*/,
                                       grpc_pollset_set* /*pollset*/) {}
 
-  static void shutdown(grpc_endpoint* ep, grpc_error_handle why) {
-    grpc_core::ExecCtx::Run(DEBUG_LOCATION,
-                            static_cast<PhonyEndpoint*>(ep)->read_cb_, why);
-  }
-
   static void destroy(grpc_endpoint* ep) {
-    delete static_cast<PhonyEndpoint*>(ep);
+    auto* endpoint = static_cast<PhonyEndpoint*>(ep);
+    grpc_core::ExecCtx::Run(DEBUG_LOCATION, endpoint->read_cb_,
+                            absl::UnavailableError("exndpoint shutdown"));
+    delete endpoint;
   }
 
   static absl::string_view get_peer(grpc_endpoint* /*ep*/) { return "test"; }
@@ -140,7 +137,7 @@ class Fixture {
                           .channel_args_preconditioning()
                           .PreconditionChannelArgs(&c_args);
     t_ = grpc_create_chttp2_transport(final_args, ep_, client);
-    grpc_chttp2_transport_start_reading(t_, nullptr, nullptr, nullptr);
+    grpc_chttp2_transport_start_reading(t_, nullptr, nullptr, nullptr, nullptr);
     FlushExecCtx();
   }
 
